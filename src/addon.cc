@@ -6,9 +6,9 @@ namespace kinect {
     using v8::Local;
     using v8::Object;
 
-    void initAll(Local<Object> exports) {
+    void InitAll(Local<Object> exports) {
         Kinect::Init(exports);
     }
 
-    NODE_MODULE(kinect, initAll);
+    NODE_MODULE(kinect, InitAll);
 }
