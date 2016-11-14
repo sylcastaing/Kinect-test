@@ -1,9 +1,8 @@
-#include <node.h>
 #include "kinect.h"
 
 namespace kinect {
 
-    using v8::Context;
+    using v8::Exception;
     using v8::Function;
     using v8::FunctionCallbackInfo;
     using v8::FunctionTemplate;
@@ -11,29 +10,86 @@ namespace kinect {
     using v8::Isolate;
     using v8::Persistent;
     using v8::String;
+    using v8::Value;
+    using v8::Undefined;
+    using v8::Handle;
 
-    Persistent<Function> Kinect::constructor;
+    Persistent<Function> Context::constructor;
 
-    Kinect::Kinect() {}
+    Context::Context(Isolate* isolate) {
+        context_ = NULL;
+        device_ = NULL;
+        running_ = false;
 
-    Kinect::~Kinect() {}
+        if (freenect_init(&context_, NULL) < 0) {
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Error initializing freenect context")));
+            return;
+        }
 
-    void Kinect::Init(Isolate* isolate) {
+        freenect_set_log_level(context_, FREENECT_LOG_DEBUG);
+        freenect_select_subdevices(context_, (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA));
+
+        int nr_devices = freenect_num_devices (context_);
+        if (nr_devices < 1) {
+            Close(isolate);
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Plug a kinect device")));
+            return;
+        }
+
+        if (freenect_open_device(context_, &device_, 0) < 0) {
+            Close(isolate);
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Could not open device")));
+            return;
+        }
+
+        freenect_set_user(device_, this);
+    }
+
+    Context::~Context() {}
+
+    Context* Context::GetContext(const FunctionCallbackInfo<Value>& args) {
+        return ObjectWrap::Unwrap<Context>(args.This());
+    }
+
+    void Context::Close(Isolate* isolate) {
+
+        running_ = false;
+
+        if (device_ != NULL) {
+            if (freenect_close_device(device_) < 0) {
+                isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Error closing device")));
+                return;
+            }
+
+             device_ = NULL;
+        }
+
+        if (context_ != NULL) {
+            if (freenect_shutdown(context_) < 0) {
+                isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Error shutting down")));
+                return;
+            }
+
+            context_ = NULL;
+        }
+    }
+
+    void Context::Init(Isolate* isolate) {
 
         Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
         tpl->SetClassName(String::NewFromUtf8(isolate, "Kinect"));
-        tpl->InstanceTemplate()->setInternalFieldCount(1);
+        tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-        NODE_SET_METHOD(tpl, "led", Led);
+        NODE_SET_PROTOTYPE_METHOD(tpl, "led", Led);
 
         constructor.Reset(isolate, tpl->GetFunction());
     }
 
-    void Kinect::New(const FunctionCallbackInfo<Value>& args) {
+    void Context::New(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
 
         if (args.IsConstructCall()) {
-            Kinect* obj = new Kinect();
+            Context* obj = new Context(isolate);
             obj->Wrap(args.This());
             args.GetReturnValue().Set(args.This());
         } else {
@@ -41,17 +97,9 @@ namespace kinect {
         }
     }
 
-    void Kinect::Led(const FunctionCallbackInfo<Value>& args) {
+    void Context::Led(const char* color, Isolate* isolate) {
 
-        Isolate* isolate = args.GetIsolate();
         freenect_led_options ledCode;
-
-        if (args.Length() != 1) {
-            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Wrong arguments")));
-            return;
-        }
-
-        char* color = *String::Utf8Value(args[0]->ToString());
 
         if (strcmp(color, "off") == 0) {
             ledCode = LED_OFF;
@@ -74,5 +122,25 @@ namespace kinect {
             isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Error setting led")));
             return;
         }
+    }
+
+    void Context::Led(const FunctionCallbackInfo<Value>& args) {
+
+        Isolate* isolate = args.GetIsolate();
+
+        if (args.Length() == 1) {
+            if (!args[0]->IsString()) {
+                isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Led argument must be a string")));
+                return;
+            }
+        }
+        else {
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Wrong arguments")));
+            return;
+        }
+
+        char* color = *String::Utf8Value(args[0]->ToString());
+
+        GetContext(args)->Led(color, isolate);
     }
 }

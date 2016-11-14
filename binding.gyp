@@ -3,8 +3,8 @@
         {
             'target_name': 'kinect',
             'sources': [
-                'src/kinect.cc',
-                'src/addon.cc'
+                'src/addon.cc',
+                'src/kinect.cc'
             ],
             'cflags!': [ '-fno-exceptions' ],
             'cflags_cc!': [ '-fno-exceptions' ]
