@@ -6,8 +6,9 @@
                 'src/addon.cc',
                 'src/kinect.cc'
             ],
-            'cflags!': [ '-fno-exceptions' ],
-            'cflags_cc!': [ '-fno-exceptions' ]
+            'libraries': [
+                '/usr/local/lib/libfreenect.a',
+            ]
         }
     ]
 }

@@ -11,7 +11,7 @@ namespace kinect {
     using v8::Persistent;
     using v8::String;
     using v8::Value;
-    using v8::Undefined;
+    using v8::Object;
     using v8::Handle;
 
     Persistent<Function> Context::constructor;
@@ -20,7 +20,7 @@ namespace kinect {
         context_ = NULL;
         device_ = NULL;
         running_ = false;
-
+        freenect_set_log_level(context_, FREENECT_LOG_DEBUG);
         if (freenect_init(&context_, NULL) < 0) {
             isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Error initializing freenect context")));
             return;
@@ -46,6 +46,19 @@ namespace kinect {
     }
 
     Context::~Context() {}
+
+    void Context::NewInstance(const FunctionCallbackInfo<Value>& args) {
+        Isolate* isolate = args.GetIsolate();
+
+        const unsigned argc = 1;
+        Local<Value> argv[argc] = { args[0] };
+        Local<Function> cons = Local<Function>::New(isolate, constructor);
+        Local<v8::Context> context = isolate->GetCurrentContext();
+        Local<Object> instance =
+            cons->NewInstance(context, argc, argv).ToLocalChecked();
+
+        args.GetReturnValue().Set(instance);
+    }
 
     Context* Context::GetContext(const FunctionCallbackInfo<Value>& args) {
         return ObjectWrap::Unwrap<Context>(args.This());
