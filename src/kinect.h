@@ -4,7 +4,7 @@
 #include <node.h>
 #include <node_object_wrap.h>
 
-#include <libfreenect.h>
+#include <libfreenect/libfreenect.h>
 #include <string.h>
 
 namespace kinect {
