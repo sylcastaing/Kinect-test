@@ -14,13 +14,13 @@ namespace kinect {
     using v8::Object;
     using v8::Handle;
 
-    Persistent<Function> Context::constructor;
+    Persistent<Function> Kinect::constructor;
 
-    Context::Context(Isolate* isolate) {
+    Kinect::Kinect(Isolate* isolate) {
         context_ = NULL;
         device_ = NULL;
         running_ = false;
-        freenect_set_log_level(context_, FREENECT_LOG_DEBUG);
+
         if (freenect_init(&context_, NULL) < 0) {
             isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Error initializing freenect context")));
             return;
@@ -45,9 +45,9 @@ namespace kinect {
         freenect_set_user(device_, this);
     }
 
-    Context::~Context() {}
+    Kinect::~Kinect() {}
 
-    void Context::NewInstance(const FunctionCallbackInfo<Value>& args) {
+    void Kinect::NewInstance(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
 
         const unsigned argc = 1;
@@ -60,11 +60,11 @@ namespace kinect {
         args.GetReturnValue().Set(instance);
     }
 
-    Context* Context::GetContext(const FunctionCallbackInfo<Value>& args) {
-        return ObjectWrap::Unwrap<Context>(args.This());
+    Kinect* Kinect::GetContext(const FunctionCallbackInfo<Value>& args) {
+        return ObjectWrap::Unwrap<Kinect>(args.This());
     }
 
-    void Context::Close(Isolate* isolate) {
+    void Kinect::Close(Isolate* isolate) {
 
         running_ = false;
 
@@ -87,44 +87,52 @@ namespace kinect {
         }
     }
 
-    void Context::Init(Isolate* isolate) {
+    void Kinect::Init(Isolate* isolate) {
 
         Local<FunctionTemplate> tpl = FunctionTemplate::New(isolate, New);
         tpl->SetClassName(String::NewFromUtf8(isolate, "Kinect"));
         tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
         NODE_SET_PROTOTYPE_METHOD(tpl, "led", Led);
+        NODE_SET_PROTOTYPE_METHOD(tpl, "getAngle", GetAngle);
+        NODE_SET_PROTOTYPE_METHOD(tpl, "setAngle", SetAngle);
 
         constructor.Reset(isolate, tpl->GetFunction());
     }
 
-    void Context::New(const FunctionCallbackInfo<Value>& args) {
+    void Kinect::New(const FunctionCallbackInfo<Value>& args) {
         Isolate* isolate = args.GetIsolate();
 
         if (args.IsConstructCall()) {
-            Context* obj = new Context(isolate);
+            Kinect* obj = new Kinect(isolate);
             obj->Wrap(args.This());
             args.GetReturnValue().Set(args.This());
         } else {
-            // TODO
+            const int argc = 1;
+            Local<Value> argv[argc] = { args[0] };
+            Local<Function> cons = Local<Function>::New(isolate, constructor);
+            Local<v8::Context> context = isolate->GetCurrentContext();
+            Local<Object> instance =
+                cons->NewInstance(context, argc, argv).ToLocalChecked();
+            args.GetReturnValue().Set(instance);
         }
     }
 
-    void Context::Led(const char* color, Isolate* isolate) {
+    void Kinect::Led(const std::string color, Isolate* isolate) {
 
         freenect_led_options ledCode;
 
-        if (strcmp(color, "off") == 0) {
+        if (color.compare("off") == 0) {
             ledCode = LED_OFF;
-        } else if (strcmp(color, "green") == 0) {
+        } else if (color.compare("green") == 0) {
             ledCode = LED_GREEN;
-        } else if (strcmp(color, "red") == 0) {
+        } else if (color.compare("red") == 0) {
             ledCode = LED_RED;
-        } else if (strcmp(color, "yellow") == 0) {
+        } else if (color.compare("yellow") == 0) {
             ledCode = LED_YELLOW;
-        } else if (strcmp(color, "blink green") == 0) {
+        } else if (color.compare("blink green") == 0) {
             ledCode = LED_BLINK_GREEN;
-        } else if (strcmp(color, "blink red yellow") == 0) {
+        } else if (color.compare("blink red yellow") == 0) {
             ledCode = LED_BLINK_RED_YELLOW;
         } else {
             isolate->ThrowException(Exception::Error(String::NewFromUtf8(isolate, "Did not recognize given led code")));
@@ -137,7 +145,7 @@ namespace kinect {
         }
     }
 
-    void Context::Led(const FunctionCallbackInfo<Value>& args) {
+    void Kinect::Led(const FunctionCallbackInfo<Value>& args) {
 
         Isolate* isolate = args.GetIsolate();
 
@@ -152,8 +160,45 @@ namespace kinect {
             return;
         }
 
-        char* color = *String::Utf8Value(args[0]->ToString());
+        std::string color(*v8::String::Utf8Value(args[0]->ToString()));
 
         GetContext(args)->Led(color, isolate);
+    }
+
+    double Kinect::GetAngle(v8::Isolate* isolate) {
+        return freenect_get_tilt_degs(freenect_get_tilt_state(device_));
+    }
+
+    void Kinect::GetAngle(const v8::FunctionCallbackInfo<v8::Value>& args) {
+
+        Isolate* isolate = args.GetIsolate();
+
+        args.GetReturnValue().Set(v8::Number::New(isolate, GetContext(args)->GetAngle(isolate)));
+    }
+
+    void Kinect::SetAngle(double angle, v8::Isolate* isolate) {
+        angle = (angle > 20) ? 20 : angle;
+        angle = (angle < -20) ? -20 : angle;
+
+        freenect_set_tilt_degs(device_, angle);
+    }
+
+    void Kinect::SetAngle(const v8::FunctionCallbackInfo<v8::Value>& args) {
+
+        Isolate* isolate = args.GetIsolate();
+
+        if (args.Length() == 1) {
+            if (!args[0]->IsNumber()) {
+                isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Tilt argument must be a number")));
+                return;
+            }
+        } else {
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expecting at least one argument with the led status")));
+            return;
+        }
+
+        double angle = args[0]->NumberValue();
+
+        GetContext(args)->SetAngle(angle, isolate);
     }
 }

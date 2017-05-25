@@ -11,11 +11,11 @@ namespace kinect {
     using v8::Value;
 
     void CreateObject(const FunctionCallbackInfo<Value>& args) {
-        Context::NewInstance(args);
+        Kinect::NewInstance(args);
     }
 
     void InitAll(Local<Object> exports, Local<Object> module) {
-        Context::Init(exports->GetIsolate());
+        Kinect::Init(exports->GetIsolate());
 
         NODE_SET_METHOD(module, "exports", CreateObject);
     }

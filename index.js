@@ -1,7 +1,13 @@
-const kinect = require('./build/Release/kinect');
+const kinect = require('./build/Debug/kinect');
 
-var test = kinect(0);
+var test = kinect();
 
+try {
+  test.led('green');
 
-
-console.log(test);
+  test.setAngle(1);
+  console.log(test.getAngle());
+}
+catch(err) {
+  console.log(err);
+}
