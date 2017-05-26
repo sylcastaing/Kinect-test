@@ -166,6 +166,7 @@ namespace kinect {
     }
 
     double Kinect::GetAngle(v8::Isolate* isolate) {
+        freenect_update_tilt_state(device_);
         return freenect_get_tilt_degs(freenect_get_tilt_state(device_));
     }
 
@@ -187,18 +188,25 @@ namespace kinect {
 
         Isolate* isolate = args.GetIsolate();
 
-        if (args.Length() == 1) {
+        if (args.Length() >= 1) {
             if (!args[0]->IsNumber()) {
                 isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Tilt argument must be a number")));
                 return;
             }
         } else {
-            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expecting at least one argument with the led status")));
+            isolate->ThrowException(Exception::TypeError(String::NewFromUtf8(isolate, "Expecting at least one argument with the led status and an optional callback")));
             return;
         }
 
         double angle = args[0]->NumberValue();
 
         GetContext(args)->SetAngle(angle, isolate);
+
+        if (args.Length() == 2) {
+            const unsigned argc = 0;
+            Local<Value> argv[argc] = NULL;
+            Local<v8::Function> cb = Local<Function>::Cast(args[1]);
+            cb->Call(Null(isolate), argc, argv);
+        }
     }
 }
